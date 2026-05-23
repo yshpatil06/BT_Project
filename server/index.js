@@ -38,7 +38,25 @@ app.locals.broadcast = (projectId, data) => {
   }
 };
 
-app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+// ✅ CORS fix
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowed = [
+      process.env.CLIENT_URL,
+      process.env.CLIENT_URL + '/',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ].filter(Boolean);
+
+    if (!origin || allowed.some(o => origin.startsWith(o.replace(/\/$/, '')))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/projects', projectRoutes);
