@@ -1,19 +1,71 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
 require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const cors = require('cors');
+const mongoose = require('mongoose');
+
+const projectRoutes = require('./routes/projects');
+const packageRoutes = require('./routes/packages');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const server = http.createServer(app);
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB Connected ✅'))
-  .catch(err => console.log(err));
+// WebSocket server
+const wss = new WebSocket.Server({ server });
 
-app.get('/', (req, res) => {
-  res.send('Browser IDE Server Running 🚀');
+// Store connected clients by projectId
+const clients = new Map();
+
+wss.on('connection', (ws, req) => {
+  const projectId = new URL(req.url, 'http://localhost').searchParams.get('projectId');
+  if (projectId) {
+    if (!clients.has(projectId)) clients.set(projectId, new Set());
+    clients.get(projectId).add(ws);
+    console.log(`WS client connected for project: ${projectId}`);
+  }
+
+  ws.on('close', () => {
+    if (projectId && clients.has(projectId)) {
+      clients.get(projectId).delete(ws);
+    }
+  });
 });
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Broadcast to all clients of a project
+app.locals.broadcast = (projectId, data) => {
+  if (clients.has(projectId)) {
+    const msg = JSON.stringify(data);
+    clients.get(projectId).forEach(ws => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    });
+  }
+};
+
+// Middleware
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+app.use(express.json({ limit: '10mb' }));
+
+// Routes
+app.use('/api/projects', projectRoutes);
+app.use('/api/packages', packageRoutes);
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+
+// Connect MongoDB and start server
+const PORT = process.env.PORT || 8000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/atgcode';
+
+mongoose
+  .connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.log('Starting without MongoDB (in-memory mode)...');
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (no DB)`));
+  });
+
+module.exports = { app, wss };
