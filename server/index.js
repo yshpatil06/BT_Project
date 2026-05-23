@@ -4,7 +4,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const path = require('path');
 
 const projectRoutes = require('./routes/projects');
 const packageRoutes = require('./routes/packages');
@@ -62,13 +61,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/projects', projectRoutes);
 app.use('/api/packages', packageRoutes);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
-
-// Serve React client build
-const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientBuildPath));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(clientBuildPath, 'index.html'));
-});
 
 const PORT = process.env.PORT || 8000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/atgcode';
