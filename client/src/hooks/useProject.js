@@ -22,7 +22,15 @@ export function useProject(projectId) {
   // WebSocket for real-time collab
   useEffect(() => {
     if (!projectId) return;
-    const wsUrl = `ws://${window.location.host}/ws?projectId=${projectId}`;
+
+    // Production mein Render ka URL, local mein localhost
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    const wsUrl = apiUrl
+      .replace('https://', 'wss://')
+      .replace('http://', 'ws://')
+      .replace('/api', '')
+      + `/ws?projectId=${projectId}`;
+
     try {
       wsRef.current = new WebSocket(wsUrl);
       wsRef.current.onmessage = (e) => {
